@@ -4,18 +4,6 @@ from alive_progress import config_handler
 
 RESOLVE_ERROS = False
 NO_WARNING = False
-SKIP = False
-
-
-def config_bar_api():
-    """ Configuração padrão da barra de progresso para API
-    """
-    config_handler.set_global(bar="smooth",
-                              stats=True,
-                              enrich_print=False,
-                              spinner=None,
-                              receipt=True,
-                              elapsed=True)
 
 
 def config_bar_excel():

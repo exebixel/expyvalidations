@@ -10,18 +10,22 @@ from expyvalidations.excel.checks import CheckTypes
 from expyvalidations.utils import string_normalize
 
 
-class Excel:
+class ExpyValidations:
 
-    def __init__(self,
-                 book: pd.ExcelFile,
-                 sheet_name: str,
-                 header_row: int = 1,
-                 verbose: bool = False):
+    def __init__(
+        self,
+        path_file: str,
+        sheet_name: str = "sheet",
+        book: pd.ExcelFile = None,
+        header_row: int = 1,
+        verbose: bool = False,
+    ):
 
         self.column_details: list = []
         self.verbose: bool = verbose
-        self.__book = book
+        self.__book = pd.ExcelFile(path_file)
 
+        self.__errors_list: list = []
         self.erros: bool = False
         """
         indica se ouve algum erro nas validações da planilha
@@ -31,19 +35,17 @@ class Excel:
 
         self.excel: pd.DataFrame
         try:
-            excel = pd.read_excel(book,
-                                  self.sheet_name(sheet_name),
-                                  header=header_row)
+            excel = pd.read_excel(self.__book, self.sheet_name(sheet_name), header=header_row)
             # retirando linhas e colunas em brando do Data Frame
             excel = excel.dropna(how="all")
             excel.columns = excel.columns.astype("string")
-            excel = excel.loc[:, ~excel.columns.str.contains('^Unnamed')]
+            excel = excel.loc[:, ~excel.columns.str.contains("^Unnamed")]
             excel = excel.astype(object)
             excel = excel.where(pd.notnull(excel), None)
             self.excel = excel
 
         except ValueError as exp:
-            sys.exit(exp)
+            raise ValueError(exp)
 
         self.__header_row = header_row
         self.add_row_column()
@@ -65,8 +67,7 @@ class Excel:
             name = string_normalize(names)
             if re.search(search, name, re.IGNORECASE):
                 return names
-        raise ValueError(
-            f"ERROR! Sheet '{search}' not found! Rename your sheet!")
+        raise ValueError(f"ERROR! Sheet '{search}' not found! Rename your sheet!")
 
     def column_name(self, column_name: Union[str, list[str]]) -> str:
         """
@@ -89,17 +90,28 @@ class Excel:
         column_formated = " ".join(column_name)
         raise ValueError(f"Column '{column_formated}' not found!")
 
-    def add_column(self,
-                   key: str,
-                   name: Union[str, list[str]],
-                   required: bool = True,
-                   default: Any = None,
-                   types: Literal["string", "int", "float", "bool", "date",
-                                  "time", "email", "cel", "cpf",
-                                  "sex"] = "string",
-                   length: int = 0,
-                   custom_function_before: Callable = None,
-                   custom_function_after: Callable = None):
+    def add_column(
+        self,
+        key: str,
+        name: Union[str, list[str]],
+        required: bool = True,
+        default: Any = None,
+        types: Literal[
+            "string",
+            "int",
+            "float",
+            "bool",
+            "date",
+            "time",
+            "email",
+            "cel",
+            "cpf",
+            "sex",
+        ] = "string",
+        length: int = 0,
+        custom_function_before: Callable = None,
+        custom_function_after: Callable = None,
+    ):
         """
         Função responsável por adicionar as colunas que serão lidas
         da planilha \n
@@ -139,21 +151,25 @@ class Excel:
                 print(f"WARNING! {exp}")
             excel[key] = default
         else:
-            excel.rename({column_name: key}, axis='columns', inplace=True)
+            excel.rename({column_name: key}, axis="columns", inplace=True)
 
-        self.column_details.append({
-            "key": key,
-            "types": types,
-            "default": default,
-            "length": length,
-            "custom_function_before": custom_function_before,
-            "custom_function_after": custom_function_after
-        })
+        self.column_details.append(
+            {
+                "key": key,
+                "types": types,
+                "default": default,
+                "length": length,
+                "custom_function_before": custom_function_before,
+                "custom_function_after": custom_function_after,
+            }
+        )
 
-    def check_all(self,
-                  check_row: Callable = None,
-                  check_duplicated_keys: list[str] = None,
-                  checks_final: list[Callable] = None) -> bool:
+    def check_all(
+        self,
+        check_row: Callable = None,
+        check_duplicated_keys: list[str] = None,
+        checks_final: list[Callable] = None,
+    ) -> bool:
         """
         Função responsável por verificar todas as colunas
         da planilha
@@ -178,15 +194,14 @@ class Excel:
         config.config_bar_excel()
 
         # verificando todas as colunas
-        with alive_bar(len(excel.index) * len(self.column_details),
-                       title="Checking for columns...") as pbar:
+        with alive_bar(
+            len(excel.index) * len(self.column_details), title="Checking for columns..."
+        ) as pbar:
             # Verificações por coluna
             for column in self.column_details:
                 for index in excel.index:
                     value = excel.at[index, column["key"]]
-                    invalid = self.check_value(value=value,
-                                               index=index,
-                                               **column)
+                    invalid = self.check_value(value=value, index=index, **column)
                     if invalid and not self.erros:
                         self.erros = True
                     pbar()
@@ -196,8 +211,7 @@ class Excel:
             if check_row is not None:
                 for row in excel.index:
                     try:
-                        data = check_row(excel.at[row, "row"],
-                                         excel.loc[row].copy())
+                        data = check_row(excel.at[row, "_row"], excel.loc[row].copy())
                         for key, value in data.items():
                             excel.at[row, key] = value
 
@@ -209,7 +223,8 @@ class Excel:
         if check_duplicated_keys is not None:
             try:
                 excel = self.checks.check_duplications(
-                    data=excel, keys=check_duplicated_keys)
+                    data=excel, keys=check_duplicated_keys
+                )
             except CheckException:
                 self.erros = True
 
@@ -224,16 +239,18 @@ class Excel:
         self.excel = excel
         return self.erros
 
-    def check_value(self,
-                    value: Any,
-                    key: str,
-                    types: str,
-                    index: int,
-                    default: Any = None,
-                    length: int = 0,
-                    custom_function_before: Callable = None,
-                    custom_function_after: Callable = None) -> bool:
-        """ Executa todas as verificações em um valor especifico,
+    def check_value(
+        self,
+        value: Any,
+        key: str,
+        types: str,
+        index: int,
+        default: Any = None,
+        length: int = 0,
+        custom_function_before: Callable = None,
+        custom_function_after: Callable = None,
+    ) -> bool:
+        """Executa todas as verificações em um valor especifico,
         retorna True um False para caso as verificações passarem ou não
         """
         excel = self.excel
@@ -246,29 +263,24 @@ class Excel:
         # das verificações padrões
         if custom_function_before is not None:
             try:
-                value = custom_function_before(value=value,
-                                               key=key,
-                                               default=default,
-                                               row=self.row(index))
+                value = custom_function_before(
+                    value=value, key=key, default=default, row=self.row(index)
+                )
             except CheckException:
                 erros = True
 
         # Executa a verificação padrão
         try:
-            value = check_function(value,
-                                   key=key,
-                                   default=default,
-                                   row=self.row(index))
+            value = check_function(value, key=key, default=default, row=self.row(index))
         except CheckException:
             erros = True
 
         # Verificação de tamanho de string
         if length not in (0, None):
             try:
-                value = self.checks.check_length(value,
-                                                 key=key,
-                                                 row=self.row(index),
-                                                 length=length)
+                value = self.checks.check_length(
+                    value, key=key, row=self.row(index), length=length
+                )
             except CheckException:
                 erros = True
 
@@ -276,10 +288,9 @@ class Excel:
         # depois das verificações padrão
         if custom_function_after is not None:
             try:
-                value = custom_function_after(value=value,
-                                              key=key,
-                                              default=default,
-                                              row=self.row(index))
+                value = custom_function_after(
+                    value=value, key=key, default=default, row=self.row(index)
+                )
             except CheckException:
                 erros = True
 
@@ -292,7 +303,7 @@ class Excel:
         'add_column'
         """
         columns = list(map(lambda col: col["key"], self.column_details))
-        columns.append("row")
+        columns.append("_row")
         self.excel = self.excel[columns]
 
     def row(self, index: int) -> int:
@@ -302,20 +313,20 @@ class Excel:
         return index + self.__header_row + 2
 
     def add_row_column(self):
-        """ Adicionar uma columa ao datafreme chamada 'row'
+        """Adicionar uma columa ao datafreme chamada 'row'
         com o número de cada linha
         """
         excel = self.excel
         rows = []
         for i in excel.index:
             rows.append(self.row(i))
-        excel["row"] = rows
+        excel["_row"] = rows
 
     def data_all(self) -> dict:
         excel = self.excel
         if excel.empty:
             return {}
 
-        excel = excel.drop(columns="row")
+        excel = excel.drop(columns="_row")
         excel = excel.where(pd.notnull(excel), None)
-        return excel.to_dict('records')
+        return excel.to_dict("records")

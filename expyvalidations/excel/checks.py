@@ -238,7 +238,7 @@ class CheckTypes():
                 # Lista duplicidades todos os registros duplicados
                 # sem manter nenhum
                 duplicated[col] = data[data.duplicated(
-                    keep=False, subset=col)][[col, "row"]]
+                    keep=False, subset=col)][[col, "_row"]]
 
                 # Exclui items nulos
                 duplicated[col] = duplicated[col].dropna(subset=[col])
@@ -247,7 +247,7 @@ class CheckTypes():
                     duplicated[col][col] = duplicated[col][col].astype(str)
                     # ordena a lista
                     duplicated[col] = duplicated[col].sort_values(
-                        by=[col, "row"])
+                        by=[col, "_row"])
                     total += len(duplicated[col].index)
                 else:
                     duplicated.pop(col)
@@ -263,8 +263,8 @@ class CheckTypes():
                     if (n is not None
                             and duplicate.at[i, col] == duplicate.at[n, col]):
                         if not config.RESOLVE_ERROS or not config.NO_WARNING:
-                            line1 = duplicate.at[i, "row"]
-                            line2 = duplicate.at[n, "row"]
+                            line1 = duplicate.at[i, "_row"]
+                            line2 = duplicate.at[n, "_row"]
                             value = duplicate.at[i, col]
                             p = "DUPLICATED! lines {} and {}, Column {}: value '{}'"
                             print(p.format(line1, line2, col, value))
