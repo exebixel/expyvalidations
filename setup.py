@@ -22,10 +22,10 @@ with open('requirements.txt') as f:
     requirements = f.read().splitlines()
 
 setuptools.setup(
-    name="oneparams",
+    name="expyvalidations",
     packages=setuptools.find_packages(),
     version=__version__,
-    description="One System Parametrizer",
+    description="Sheets data validation",
     # long_description=long_description,
     long_description_content_type="text/markdown",
     author="exebixel",
@@ -36,6 +36,9 @@ setuptools.setup(
     classifiers=[
         "Operating System :: OS Independent",
         "Environment :: Console",
+        'Intended Audience :: Developers',
+        'Topic :: Software Development :: Libraries',
+        'License :: OSI Approved :: MIT License',
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.7",

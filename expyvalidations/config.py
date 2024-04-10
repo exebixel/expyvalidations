@@ -11,7 +11,7 @@ def config_bar_excel():
     """
     config_handler.set_global(bar=None,
                               spinner=False,
-                              receipt=False,
+                              receipt=True,
                               enrich_print=False,
                               stats=False,
                               elapsed=False)
