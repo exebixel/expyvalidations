@@ -15,8 +15,8 @@ if os.path.isdir(dist_dir):
 if os.path.isdir(build_dir):
     shutil.rmtree(build_dir)
 
-# with open("README.md", "r", encoding="utf-8") as fh:
-#     long_description = fh.read()
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
 
 with open('requirements.txt') as f:
     requirements = f.read().splitlines()
@@ -26,11 +26,12 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     version=__version__,
     description="Sheets data validation",
-    # long_description=long_description,
+    long_description=long_description,
     long_description_content_type="text/markdown",
     author="exebixel",
     author_email="ezequielnat7@gmail.com",
     url="https://github.com/exebixel/expyvalidations",
+    license='MIT',
     install_requires=requirements,
     python_requires=">=3.7",
     classifiers=[
@@ -44,5 +45,8 @@ setuptools.setup(
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
     ],
-    zip_safe=False,
+    project_urls={
+        "Documentation": "https://github.com/exebixel/expyvalidations/wiki",
+        "Source": "https://github.com/exebixel/expyvalidations",
+    }
 )
