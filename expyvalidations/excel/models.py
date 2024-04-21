@@ -19,6 +19,7 @@ class TypeError(Enum):
     WARNING = "Warning"
     ERROR = "ERROR"
     DUPLICATED = "Duplication"
+    CRITICAL = "CRITICAL"
 
 
 class Error(BaseModel):

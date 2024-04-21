@@ -1,13 +1,23 @@
 import re
-from typing import Callable, Any, Union
-from alive_progress import alive_bar
+from typing import Any, Callable, Union
 
 import pandas as pd
+from alive_progress import alive_bar
+
 from expyvalidations import config
-from expyvalidations.config import CheckException
-from expyvalidations.excel.checks import CheckTypes
-from expyvalidations.excel.model import ColumnDefinition, Error, Types, TypeError
+from expyvalidations.excel.models import (ColumnDefinition, Error, TypeError, Types)
+from expyvalidations.exceptions import ValidateException
 from expyvalidations.utils import string_normalize
+from expyvalidations.validations.bool import validate_bool
+from expyvalidations.validations.cpf import validate_cpf
+from expyvalidations.validations.date import validate_date
+from expyvalidations.validations.duplications import validate_duplications
+from expyvalidations.validations.email import validate_email
+from expyvalidations.validations.float import validate_float
+from expyvalidations.validations.int import validate_int
+from expyvalidations.validations.sex import validate_sex
+from expyvalidations.validations.string import validate_string
+from expyvalidations.validations.time import validate_time
 
 
 class ExpyValidations:
@@ -47,7 +57,17 @@ class ExpyValidations:
 
         self.__header_row = header_row
 
-        self.checks = CheckTypes()
+        self.__validations_types = {
+            "string": validate_string,
+            "float": validate_float,
+            "int": validate_int,
+            "date": validate_date,
+            "time": validate_time,
+            "bool": validate_bool,
+            "cpf": validate_cpf,
+            "email": validate_email,
+            "sex": validate_sex,
+        }
 
     def sheet_name(self, search: str) -> str:
         """
@@ -133,26 +153,26 @@ class ExpyValidations:
                 print(f"ERROR! Required {exp}")
                 self.__errors_list.append(
                     Error(
+                        type=TypeError.CRITICAL,
                         row=self.__header_row,
-                        column=0,
+                        column=None,
                         message=f"Required {exp}",
                     )
                 )
-            elif config.NO_WARNING:
-                print(f"WARNING! {exp}")
-            excel[key] = default
+            else:
+                excel[key] = pd.Series(default, dtype="object")
         else:
             excel.rename({column_name: key}, axis="columns", inplace=True)
 
-        self.column_details.append(
-            ColumnDefinition(
-                key=key,
-                types=types,
-                default=default,
-                custom_function_before=custom_function_before,
-                custom_function_after=custom_function_after,
+            self.column_details.append(
+                ColumnDefinition(
+                    key=key,
+                    types=types,
+                    default=default,
+                    custom_function_before=custom_function_before,
+                    custom_function_after=custom_function_after,
+                )
             )
-        )
 
     def check_all(
         self,
@@ -174,10 +194,10 @@ class ExpyValidations:
         False se NÃO ouve erros na verificação
         True se ouve erros na verificação
         """
-        if self.__errors_list:
-            head = self.__header_row + 1
-            print(f"ERROS FOUND! REMENBER HEADER ROW = {head}")
-            raise ValueError("ERROS FOUND! REMENBER HEADER ROW = {head}")
+        # if self.__errors_list:
+        #     head = self.__header_row + 1
+        #     print(f"ERROS FOUND! REMENBER HEADER ROW = {head}")
+        #     raise ValueError("ERROS FOUND! REMENBER HEADER ROW = {head}")
 
         excel = self.excel
 
@@ -206,7 +226,7 @@ class ExpyValidations:
                         for key, value in data.items():
                             excel.at[row, key] = value
 
-                    except CheckException as exp:
+                    except ValidateException as exp:
                         self.__errors_list.append(
                             Error(
                                 row=self.__row(row),
@@ -219,10 +239,8 @@ class ExpyValidations:
         # Verificações totais (duplicação de dados)
         if check_duplicated_keys is not None:
             try:
-                excel = self.checks.check_duplications(
-                    data=excel, keys=check_duplicated_keys
-                )
-            except CheckException as exp:
+                excel = validate_duplications(data=excel, keys=check_duplicated_keys)
+            except ValidateException as exp:
                 for error in exp.args[0]:
                     self.__errors_list.append(
                         Error(
@@ -263,14 +281,14 @@ class ExpyValidations:
         functions = []
         if custom_function_before is not None:
             functions.append(custom_function_before)
-        functions.append(self.checks.get_type_function(types))
+        functions.append(self.__validations_types[types])
         if custom_function_after is not None:
             functions.append(custom_function_after)
 
         for func in functions:
             try:
                 value = func(value)
-            except CheckException as exp:
+            except ValidateException as exp:
                 self.__errors_list.append(
                     Error(
                         row=self.__row(index),
@@ -288,8 +306,11 @@ class ExpyValidations:
         """
         return index + self.__header_row + 2
 
-    def data_all(self) -> dict:
+    def get_result(self, force: bool = False) -> dict:
         excel = self.excel
+        if not force and self.has_errors():
+            raise ValidateException("Errors found in the validations")
+
         if excel.empty:
             return {}
 
@@ -297,6 +318,9 @@ class ExpyValidations:
 
         excel = excel.where(pd.notnull(excel), None)
         return excel[list_colums].to_dict("records")
+
+    def has_errors(self) -> bool:
+        return True if self.__errors_list else False
 
     def print_errors(self):
         for error in self.__errors_list:
@@ -307,7 +331,7 @@ class ExpyValidations:
                     f"{error.type.value}! in line {error.row}, Column {error.column}: {error.message}"
                 )
 
-    def get_all_errors(self) -> list[dict]:
+    def get_errors(self) -> list[dict]:
         errors = []
         for error in self.__errors_list:
             errors.append(
