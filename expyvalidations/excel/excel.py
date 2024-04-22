@@ -5,7 +5,7 @@ import pandas as pd
 from alive_progress import alive_bar
 
 from expyvalidations import config
-from expyvalidations.excel.models import (ColumnDefinition, Error, TypeError, Types)
+from expyvalidations.excel.models import ColumnDefinition, Error, TypeError, Types
 from expyvalidations.exceptions import ValidateException
 from expyvalidations.utils import string_normalize
 from expyvalidations.validations.bool import validate_bool
@@ -42,7 +42,7 @@ class ExpyValidations:
         self.excel: pd.DataFrame
         try:
             excel = pd.read_excel(
-                self.__book, self.sheet_name(sheet_name), header=header_row
+                self.__book, self.__sheet_name(sheet_name), header=header_row
             )
             # retirando linhas e colunas em brando do Data Frame
             excel = excel.dropna(how="all")
@@ -69,7 +69,7 @@ class ExpyValidations:
             "sex": validate_sex,
         }
 
-    def sheet_name(self, search: str) -> str:
+    def __sheet_name(self, search: str) -> str:
         """
         Função responsável por pesquisa a string do parâmetro 'search'
         nas planilhas (sheets) do 'book' especificado no __init__
@@ -86,7 +86,7 @@ class ExpyValidations:
                 return names
         raise ValueError(f"ERROR! Sheet '{search}' not found! Rename your sheet!")
 
-    def column_name(self, column_name: Union[str, list[str]]) -> str:
+    def __column_name(self, column_name: Union[str, list[str]]) -> str:
         """
         Resquias e retorna o nome da coluna da planilha,
         se não encontrar, retorna ValueError
@@ -147,7 +147,12 @@ class ExpyValidations:
         excel = self.excel
 
         try:
-            column_name = self.column_name(name)
+            default_validation = self.__validations_types[types]
+        except KeyError:
+            raise ValueError(f"Type '{types}' not found!")
+
+        try:
+            column_name = self.__column_name(name)
         except ValueError as exp:
             if required:
                 print(f"ERROR! Required {exp}")
@@ -167,8 +172,8 @@ class ExpyValidations:
             self.column_details.append(
                 ColumnDefinition(
                     key=key,
-                    types=types,
                     default=default,
+                    function_validation=default_validation,
                     custom_function_before=custom_function_before,
                     custom_function_after=custom_function_after,
                 )
@@ -176,8 +181,7 @@ class ExpyValidations:
 
     def check_all(
         self,
-        check_row_before: Callable = None,
-        check_row_after: Callable = None,
+        check_row: Callable = None,
         check_duplicated_keys: list[str] = None,
         checks_final: list[Callable] = None,
     ) -> bool:
@@ -194,11 +198,6 @@ class ExpyValidations:
         False se NÃO ouve erros na verificação
         True se ouve erros na verificação
         """
-        # if self.__errors_list:
-        #     head = self.__header_row + 1
-        #     print(f"ERROS FOUND! REMENBER HEADER ROW = {head}")
-        #     raise ValueError("ERROS FOUND! REMENBER HEADER ROW = {head}")
-
         excel = self.excel
 
         # configuração padrão da barra de progresso
@@ -212,17 +211,19 @@ class ExpyValidations:
             for column in self.column_details:
                 for index in excel.index:
                     value = excel.at[index, column.key]
-                    self.check_value(value=value, index=index, **column.model_dump())
+                    self.__check_value(
+                        value=value, index=index, column_definition=column
+                    )
                     pbar()
 
         # Verificações por linha
-        if check_row_after is not None:
+        if check_row is not None:
             with alive_bar(len(excel.index), title="Checking for rows...") as pbar:
                 list_colums = list(map(lambda col: col.key, self.column_details))
                 for row in excel.index:
                     try:
                         data = excel[list_colums].loc[row].to_dict()
-                        data = check_row_after(data)
+                        data = check_row(data)
                         for key, value in data.items():
                             excel.at[row, key] = value
 
@@ -242,14 +243,8 @@ class ExpyValidations:
                 excel = validate_duplications(data=excel, keys=check_duplicated_keys)
             except ValidateException as exp:
                 for error in exp.args[0]:
-                    self.__errors_list.append(
-                        Error(
-                            type=TypeError.DUPLICATED,
-                            row=error["line"],
-                            column=error["column"],
-                            message=error["error"],
-                        )
-                    )
+                    error.row = self.__row(error.row)
+                    self.__errors_list.append(error)
 
         # if checks_final is not None:
         #     for check in checks_final:
@@ -262,26 +257,24 @@ class ExpyValidations:
         self.excel = excel
         return True if self.__errors_list else False
 
-    def check_value(
+    def __check_value(
         self,
         value: Any,
-        key: str,
-        types: str,
         index: int,
-        default: Any = None,
-        length: int = 0,
-        custom_function_before: Callable = None,
-        custom_function_after: Callable = None,
+        column_definition: ColumnDefinition,
     ) -> None:
         """Executa todas as verificações em um valor especifico,
         retorna True um False para caso as verificações passarem ou não
         """
-        excel = self.excel
+        key = column_definition.key
+        function_validation = column_definition.function_validation
+        custom_function_before = column_definition.custom_function_before
+        custom_function_after = column_definition.custom_function_after
 
         functions = []
         if custom_function_before is not None:
             functions.append(custom_function_before)
-        functions.append(self.__validations_types[types])
+        functions.append(function_validation)
         if custom_function_after is not None:
             functions.append(custom_function_after)
 
@@ -298,7 +291,7 @@ class ExpyValidations:
                 )
                 break
 
-        excel.at[index, key] = value
+        self.excel.at[index, key] = value
 
     def __row(self, index: int) -> int:
         """
