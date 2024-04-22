@@ -21,6 +21,29 @@ from expyvalidations.validations.time import validate_time
 
 
 class ExpyValidations:
+    """
+    A class that provides functionality for validating Excel files.
+
+    Parameters:
+    - path_file (str): The path to the Excel file.
+    - sheet_name (str): The name of the sheet in the Excel file. Default is "sheet".
+    - header_row (int): The row number where the header is located. Default is 1.
+
+    Attributes:
+    - __column_details (list[ColumnDefinition]): A list of column definitions.
+    - __book (pd.ExcelFile): The Excel file object.
+    - __errors_list (list[Error]): A list of errors encountered during validation.
+    - excel (pd.DataFrame): The Excel data as a DataFrame.
+
+    Methods:
+    - __init__(self, path_file: str, sheet_name: str = "sheet", header_row: int = 1): Initializes the ExpyValidations object.
+    - __sheet_name(self, search: str) -> str: Searches for a sheet name in the Excel file.
+    - __column_name(self, column_name: Union[str, list[str]]) -> str: Returns the column name in the Excel file.
+    - add_column(self, key: str, name: Union[str, list[str]], required: bool = True, default: Any = None, types: Types = "string", custom_function_before: Callable = None, custom_function_after: Callable = None): Adds a column to be validated.
+    - check_all(self, check_row: Callable = None, check_duplicated_keys: list[str] = None, checks_final: list[Callable] = None) -> bool: Performs all the validations on the Excel data.
+    - __check_value(self, value: Any, index: int, column_definition: ColumnDefinition) -> None: Checks a specific value against the column definition.
+
+    """
 
     def __init__(
         self,
@@ -28,16 +51,18 @@ class ExpyValidations:
         sheet_name: str = "sheet",
         header_row: int = 1,
     ):
+        """
+        Initializes the ExpyValidations object.
 
-        self.column_details: list[ColumnDefinition] = []
+        Parameters:
+        - path_file (str): The path to the Excel file.
+        - sheet_name (str): The name of the sheet in the Excel file. Default is "sheet".
+        - header_row (int): The row number where the header is located. Default is 1.
+        """
+        self.__column_details: list[ColumnDefinition] = []
         self.__book = pd.ExcelFile(path_file)
 
         self.__errors_list: list[Error] = []
-        """
-        indica se ouve algum erro nas validações da planilha
-        se tiver erro o método data_all não deve
-        retornar dados
-        """
 
         self.excel: pd.DataFrame
         try:
@@ -71,11 +96,16 @@ class ExpyValidations:
 
     def __sheet_name(self, search: str) -> str:
         """
-        Função responsável por pesquisa a string do parâmetro 'search'
-        nas planilhas (sheets) do 'book' especificado no __init__
-        e retornar o 1º nome de planilha que encontrar na pesquisa
+        Returns the name of the sheet that matches the given search pattern, if file has only one sheet, return the name of the sheet.
 
-        Caso tenha apenas 1 planilha no arquivo ela é retornada
+        Args:
+            search (str): The search pattern to match against the sheet names.
+
+        Returns:
+            str: The name of the matching sheet.
+
+        Raises:
+            ValueError: If no sheet matching the search pattern is found.
         """
         if len(self.__book.sheet_names) == 1:
             return self.__book.sheet_names[0]
@@ -88,8 +118,16 @@ class ExpyValidations:
 
     def __column_name(self, column_name: Union[str, list[str]]) -> str:
         """
-        Resquias e retorna o nome da coluna da planilha,
-        se não encontrar, retorna ValueError
+        Returns the name of the column in the Excel file that matches the given column name(s).
+
+        Args:
+            column_name (Union[str, list[str]]): The name(s) of the column(s) to search for.
+
+        Returns:
+            str: The name of the column that matches the given column name(s).
+
+        Raises:
+            ValueError: If the column name(s) are not found in the Excel file.
         """
         excel = self.excel
         if isinstance(column_name, str):
@@ -118,31 +156,16 @@ class ExpyValidations:
         custom_function_after: Callable = None,
     ):
         """
-        Função responsável por adicionar as colunas que serão lidas
-        da planilha \n
-        Parâmetros: \n
-        key: nome da chave do dicionario com os dados da coluna \n
-        name: nome da coluna da planilha, não é necessário informar o
-        nome completo da coluna, apenas uma palavra para busca, se o nome da
-        coluna não foi encontrado o programa fechará \n
-        default: se a coluna não for encontrada ou o valor não foi informado
-        então será considerado o valor default \n
-        types: tipo de dado que deve ser retirado da coluna \n
-        required: define se a coluna é obrigatória na planilha \n
-        length: Número máximo de caracteres que o dado pode ter,
-        padrão 1 ou seja ilimitado \n
+        Add a column to validate in the Excel file.
 
-        custom_function: recebe a referencia de uma função que sera executada
-            apos as verificações padrão, essa função deve conter os parametros:
-            value: (valor que sera verificado),
-            key: (Chave do valor que sera verificado, para fins de log),
-            row: (Linha da planilha que esta o valor que sera verificado,
-                para fins de log),
-            default: (Valor padrão que deve ser usado caso caso ocorra algum
-                erro na verificação, para resolução de problemas).
-            Essa custom_funcition deverá retornar o valor (value) verificado
-            em caso de sucesso na verficação/tratamento, caso contratio,
-            deve retornar uma Exception
+        Args:
+            key (str): The key or name of the column.
+            name (Union[str, list[str]]): The name or names of the column in the Excel file.
+            required (bool, optional): Whether the column is required. Defaults to True.
+            default (Any, optional): The default value for the column. Defaults to None.
+            types (Types, optional): The type or types of data allowed in the column. Defaults to "string".
+            custom_function_before (Callable, optional): A custom function to be executed before validating the column. Defaults to None.
+            custom_function_after (Callable, optional): A custom function to be executed after validating the column. Defaults to None.
         """
         excel = self.excel
 
@@ -169,7 +192,7 @@ class ExpyValidations:
         else:
             excel.rename({column_name: key}, axis="columns", inplace=True)
 
-            self.column_details.append(
+            self.__column_details.append(
                 ColumnDefinition(
                     key=key,
                     default=default,
@@ -183,20 +206,16 @@ class ExpyValidations:
         self,
         check_row: Callable = None,
         check_duplicated_keys: list[str] = None,
-        checks_final: list[Callable] = None,
     ) -> bool:
         """
-        Função responsável por verificar todas as colunas
-        da planilha
+        Perform various checks on the Excel data.
 
-        Parâmetros:
-        check_row: função que será executada para cada linha da planilha
-        checks_final: lista de funções que serão executadas
-            considerando todos os dados da planilha
+        Args:
+            check_row (Callable, optional): A function that performs additional checks on each row of the Excel data. Defaults to None.
+            check_duplicated_keys (list[str], optional): A list of column keys to check for duplicated values. Defaults to None.
 
-        Retorno:
-        False se NÃO ouve erros na verificação
-        True se ouve erros na verificação
+        Returns:
+            bool: True if there are errors, False otherwise.
         """
         excel = self.excel
 
@@ -205,10 +224,11 @@ class ExpyValidations:
 
         # verificando todas as colunas
         with alive_bar(
-            len(excel.index) * len(self.column_details), title="Checking for columns..."
+            len(excel.index) * len(self.__column_details),
+            title="Checking for columns...",
         ) as pbar:
             # Verificações por coluna
-            for column in self.column_details:
+            for column in self.__column_details:
                 for index in excel.index:
                     value = excel.at[index, column.key]
                     self.__check_value(
@@ -219,7 +239,7 @@ class ExpyValidations:
         # Verificações por linha
         if check_row is not None:
             with alive_bar(len(excel.index), title="Checking for rows...") as pbar:
-                list_colums = list(map(lambda col: col.key, self.column_details))
+                list_colums = list(map(lambda col: col.key, self.__column_details))
                 for row in excel.index:
                     try:
                         data = excel[list_colums].loc[row].to_dict()
@@ -237,7 +257,6 @@ class ExpyValidations:
                         )
                     pbar()
 
-        # Verificações totais (duplicação de dados)
         if check_duplicated_keys is not None:
             try:
                 excel = validate_duplications(data=excel, keys=check_duplicated_keys)
@@ -245,14 +264,6 @@ class ExpyValidations:
                 for error in exp.args[0]:
                     error.row = self.__row(error.row)
                     self.__errors_list.append(error)
-
-        # if checks_final is not None:
-        #     for check in checks_final:
-        #         try:
-        #             excel = check(excel)
-        #         except CheckException:
-        #             self.erros = True
-        #         pbar()
 
         self.excel = excel
         return True if self.__errors_list else False
@@ -263,8 +274,20 @@ class ExpyValidations:
         index: int,
         column_definition: ColumnDefinition,
     ) -> None:
-        """Executa todas as verificações em um valor especifico,
-        retorna True um False para caso as verificações passarem ou não
+        """
+        Check the value against the provided column definition and perform validations.
+
+        Args:
+            value (Any): The value to be checked.
+            index (int): The index of the value in the Excel sheet.
+            column_definition (ColumnDefinition): The definition of the column.
+
+        Returns:
+            None
+
+        Raises:
+            ValidateException: If any validation fails.
+
         """
         key = column_definition.key
         function_validation = column_definition.function_validation
@@ -295,11 +318,32 @@ class ExpyValidations:
 
     def __row(self, index: int) -> int:
         """
-        Retorna a linha do respectivo index passado
+        Calculates the row number based on the given index.
+
+        Args:
+            index (int): The index of the row.
+
+        Returns:
+            int: The calculated row number.
+
         """
         return index + self.__header_row + 2
 
     def get_result(self, force: bool = False) -> dict:
+        """
+        Retrieves the result of the Excel validations.
+
+        Args:
+            force (bool, optional): If True, the validations will be performed even if there are errors.
+                                    Defaults to False.
+
+        Returns:
+            dict: A dictionary containing the result of the validations. The keys are the column names and
+                    the values are the corresponding values from the Excel sheet.
+
+        Raises:
+            ValidateException: If there are errors in the validations and force is set to False.
+        """
         excel = self.excel
         if not force and self.has_errors():
             raise ValidateException("Errors found in the validations")
@@ -307,15 +351,32 @@ class ExpyValidations:
         if excel.empty:
             return {}
 
-        list_colums = list(map(lambda col: col.key, self.column_details))
+        list_colums = list(map(lambda col: col.key, self.__column_details))
 
         excel = excel.where(pd.notnull(excel), None)
         return excel[list_colums].to_dict("records")
 
     def has_errors(self) -> bool:
+        """
+        Check if there are any errors in the Excel object.
+
+        Returns:
+            bool: True if there are errors, False otherwise.
+        """
         return True if self.__errors_list else False
 
     def print_errors(self):
+        """
+        Prints the errors in the error list.
+
+        This method iterates over the list of errors and prints each error message along with its type, line number, and column number (if available).
+
+        Example usage:
+        >>> excel_obj = Excel()
+        >>> excel_obj.print_errors()
+        Error! in line 1: Invalid value
+        Error! in line 2, Column A: Missing data
+        """
         for error in self.__errors_list:
             if error.column is None:
                 print(f"{error.type.value}! in line {error.row}: {error.message}")
@@ -325,6 +386,18 @@ class ExpyValidations:
                 )
 
     def get_errors(self) -> list[dict]:
+        """
+        Returns a list of dictionaries representing the errors.
+
+        Each dictionary in the list contains the following keys:
+        - 'type': The type of the error.
+        - 'row': The row number where the error occurred.
+        - 'column': The column number where the error occurred.
+        - 'message': The error message.
+
+        Returns:
+        - A list of dictionaries representing the errors.
+        """
         errors = []
         for error in self.__errors_list:
             errors.append(
