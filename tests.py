@@ -1,14 +1,10 @@
 import json
-import sys
 from typing import Any
 
-# from alive_progress import alive_bar
 from pandas import ExcelFile
 
-# from oneparams.api.gservs import Gservis
-# from oneparams.api.servicos import ApiServicos
-from expyvalidations.config import CheckException
 from expyvalidations.excel.excel import ExpyValidations
+from expyvalidations.exceptions import ValidateException
 
 
 def servico(book: ExcelFile, header: int = 1, reset: bool = False):
@@ -22,12 +18,11 @@ def servico(book: ExcelFile, header: int = 1, reset: bool = False):
 
     Return None
     """
-    # one = ApiServicos()
     print("analyzing spreadsheet")
 
     ex = ExpyValidations(path_file=book, sheet_name="Servico", header_row=header)
 
-    ex.add_column(key="flagAtivo", name="ativo", required=False, default=True)
+    ex.add_column(key="flagAtivo", name="ativo", required=True, default=True)
     ex.add_column(key="descricao", name="nome", custom_function_before=check_descricao)
     ex.add_column(key="gservId", name="grupo", custom_function_after=check_descricao)
     ex.add_column(key="preco", name="valor", default=1, types="float")
@@ -73,34 +68,33 @@ def servico(book: ExcelFile, header: int = 1, reset: bool = False):
         types="bool",
     )
 
-    ex.check_all(check_row_before=row_test, check_duplicated_keys=["descricao"])
-    # ex.print_errors()
-    # print(ex.get_all_errors())
+    ex.check_all(check_row=row_test, check_duplicated_keys=["descricao"])
+    ex.print_errors()
+    list_errors = ex.get_errors()
+    for error in list_errors:
+        print(error)
 
-    data = ex.data_all()
-    print(json.dumps(data, indent=4))
+    data = ex.get_result(force=True)
+    for item in data:
+        print("{")
+        for key, value in item.items():
+            print(f"    {key}: {value}")
+        print("}")
 
 
 def check_descricao(value: Any) -> str:
     if value is None:
-        raise CheckException("Empty value")
+        raise ValidateException("Empty value")
     return value
 
 
 def check_comissao(value: Any) -> float:
-    try:
-        value = float(value)
-    except (ValueError, TypeError) as exp:
-        raise CheckException(f"Value '{value}' is not a valid number")
-
     if value <= 1:
         value = value * 100
     return value
 
 
 def row_test(data: dict) -> dict:
-    # if data["comissao"] < 50:
-    #     raise CheckException("Comissão menor que 30")
     return data
 
 
